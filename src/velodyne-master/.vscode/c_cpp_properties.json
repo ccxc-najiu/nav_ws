@@ -1,0 +1,29 @@
+{
+  "configurations": [
+    {
+      "browse": {
+        "databaseFilename": "",
+        "limitSymbolsToIncludedHeaders": true
+      },
+      "includePath": [
+        "/home/siasun/catkin_ws/devel/include/**",
+        "/opt/ros/melodic/include/**",
+        "/home/siasun/catkin_ws/src/A-LOAM-devel/include/**",
+        "/home/siasun/catkin_ws/src/blue_lcm/include/**",
+        "/home/siasun/catkin_ws/src/map_server/include/**",
+        "/home/siasun/catkin_ws/src/octomap_mapping/octomap_server/include/**",
+        "/home/siasun/catkin_ws/src/ndt_omp/include/**",
+        "/home/siasun/catkin_ws/src/pcl_and_pose_to_map/include/**",
+        "/home/siasun/catkin_ws/src/siasun_loam/include/**",
+        "/home/siasun/catkin_ws/src/velodyne-master/velodyne_driver/include/**",
+        "/home/siasun/catkin_ws/src/ground_based_autonomy_basic-melodic/src/velodyne_simulator/velodyne_gazebo_plugins/include/**",
+        "/home/siasun/catkin_ws/src/velodyne-master/velodyne_laserscan/include/**",
+        "/home/siasun/catkin_ws/src/velodyne-master/velodyne_pcl/include/**",
+        "/home/siasun/catkin_ws/src/velodyne-master/velodyne_pointcloud/include/**",
+        "/usr/include/**"
+      ],
+      "name": "ROS"
+    }
+  ],
+  "version": 4
+}

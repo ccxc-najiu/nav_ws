@@ -1,0 +1,6 @@
+<launch>
+
+    <node pkg="blue_lcm" type="blue_lcm_pro"    name="blue_lcm_pro"    output="screen"/>
+
+</launch>
+

@@ -1,0 +1,7 @@
+<launch>
+
+  <node pkg="data_generate" type="boundaryGenerate" name="boundaryGenerate" output="screen" required="true">
+    <param name="boundary_file_dir" type="string" value="$(find data_generate)/data/boundary.ply" />
+  </node>
+
+</launch>

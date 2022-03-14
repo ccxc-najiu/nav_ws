@@ -1,0 +1,19 @@
+<launch>
+
+  <!-- <param name="use_sim_time" value="true"/> -->
+  <include file="$(find local_planner)/launch/local_planner.launch" />
+
+  <include file="$(find waypoint_example)/launch/globalPlanner.launch" />
+
+  <!-- <include file="$(find waypoint_example)/launch/rvizWayPoint.launch" /> -->
+
+
+  <!-- <include file="$(find vehicle_simulator)/launch/vehicle_simulator.launch" /> -->
+
+
+  <include file="$(find loam_interface)/launch/loam_interface.launch" />
+
+  <node launch-prefix="nice" pkg="rviz" type="rviz" name="rvizGA" args="-d $(find vehicle_simulator)/rviz/vehicle_simulator.rviz" respawn="true"/>
+
+</launch>
+<!-- ctrl+K+C 注释，ctrl+K+U取消注释-->

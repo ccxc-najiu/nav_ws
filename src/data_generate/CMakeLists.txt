@@ -1,0 +1,86 @@
+cmake_minimum_required(VERSION 2.8.3)
+project(data_generate)
+
+set(CMAKE_BUILD_TYPE Release)
+set(BUILD_STATIC_LIBS ON)
+set(BUILD_SHARED_LIBS OFF)
+set(CMAKE_MODULE_PATH ${PROJECT_SOURCE_DIR}/cmake)
+
+## Find catkin macros and libraries
+find_package(catkin REQUIRED COMPONENTS
+  roscpp
+  std_msgs
+  sensor_msgs
+  pcl_ros
+)
+
+find_package(PCL REQUIRED)
+find_package(OpenCV  REQUIRED)
+###################################
+## catkin specific configuration ##
+###################################
+
+catkin_package(
+  CATKIN_DEPENDS
+  roscpp
+  std_msgs
+  sensor_msgs
+  pcl_ros
+)
+
+###########
+## Build ##
+###########
+
+## Specify additional locations of header files
+## Your package locations should be listed before other locations
+include_directories(
+  ${catkin_INCLUDE_DIRS}
+  ${PCL_INCLUDE_DIRS}
+  ${OpenCV_INCLUDE_DIRS}
+  "${PROJECT_SOURCE_DIR}/include"
+  /usr/local/include # Location when using 'make system_install'
+  /usr/include       # More usual location (e.g. when installing using a package)
+)
+
+## Specify additional locations for library files
+link_directories(
+  /usr/local/lib # Location when using 'make system_install'
+  /usr/lib       # More usual location (e.g. when installing using a package)
+)
+
+## Declare executables
+add_executable(waypointGenerate src/waypointGenerate.cpp)
+## Specify libraries to link a library or executable target against
+target_link_libraries(waypointGenerate ${catkin_LIBRARIES}  ${OpenCV_LIBS})
+
+## Declare executables
+add_executable(boundaryGenerate src/boundaryGenerate.cpp)
+## Specify libraries to link a library or executable target against
+target_link_libraries(boundaryGenerate ${catkin_LIBRARIES}  ${OpenCV_LIBS})
+
+
+## Declare executables
+add_executable(topoGraph src/topoGraph.cpp)
+## Specify libraries to link a library or executable target against
+target_link_libraries(topoGraph ${catkin_LIBRARIES}  ${OpenCV_LIBS})
+
+
+# add_executable(rvizWaypoint src/rvizWayPoint.cpp)
+# target_link_libraries(rvizWaypoint ${catkin_LIBRARIES} ${PCL_LIBRARIES})
+
+# add_executable(globalPlanner src/globalPlanner.cpp)
+# target_link_libraries(globalPlanner ${catkin_LIBRARIES} ${PCL_LIBRARIES} ${OpenCV_LIBS})
+
+install(TARGETS waypointGenerate
+  ARCHIVE DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+  LIBRARY DESTINATION ${CATKIN_PACKAGE_LIB_DESTINATION}
+  RUNTIME DESTINATION ${CATKIN_PACKAGE_BIN_DESTINATION}
+)
+
+install(DIRECTORY launch/
+  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/launch
+)
+install(DIRECTORY data/
+  DESTINATION ${CATKIN_PACKAGE_SHARE_DESTINATION}/data
+)

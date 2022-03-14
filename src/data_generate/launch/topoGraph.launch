@@ -1,0 +1,7 @@
+<launch>
+
+  <node pkg="data_generate" type="topoGraph" name="topoGraph" output="screen" required="true">
+    <param name="topoGraph_file_dir" type="string" value="$(find data_generate)/data/topoMap.txt" />
+  </node>
+
+</launch>

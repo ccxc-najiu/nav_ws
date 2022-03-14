@@ -1,0 +1,7 @@
+<launch>
+
+  <node pkg="data_generate" type="waypointGenerate" name="waypointGenerate" output="screen" required="true">
+    <param name="waypoint_file_dir" type="string" value="$(find data_generate)/data/waypoints.ply" />
+  </node>
+
+</launch>
