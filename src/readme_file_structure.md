@@ -354,5 +354,27 @@ topoMap: routePoint* vector类型变量
 
 12.设置节点，发布到topic `topoMap`，消息类型`visulization_msgs::Marker`，句柄为topoMap_pub
 
+以上5-12步完成了节点的发布与订阅设置
+
+13.定义`visualization_msgs::Marker`类型数据line_list_bigMap, 并向其中填充信息，frame_id="map", id=2, ns="lines", action=ADD, pose.orientation.w=1.0, type=LINE_LIST, scale.x=0.8, color.r=1.0, color.a=1.0，然后以线段的方式向topoMap里填充点（对每一点，先push_back本身，再push_back neighbor）
+
+14.if (sendBoundary)，这里是定义在本文件的全局变量，如果定义，则`readBoundaryFile()`，读取存储在变量`boundary_file_dir`, 由前面所说的参数读取步骤可知，该变量的值是存储在参数服务器上的参数`boundary_file_dir`，值为`$(find waypoint_example)/data/boundary.ply"`，即`roscd waypoint_example/data/boundary.ply`，读取其中数据，存储在全局变量`boundary`中
+
+15.将boundary中的数据放进`geometry_msgs::PolygonStamped`类型全局变量`boundaryMsgs`中
+
+16.设置ros::Rate rate(100)，进入while()循环
+
+17.
+
+#### poseHandle
+
+此为订阅回调函数，订阅topic `/state_estimation`，接收消息类型为`nav_msgs::Odometry`，并把接收到的的消息存储在curTime, vehicleX, vehicleY, vehicleZ中
+
+#### goal_callback
+
+此为订阅回调函数，订阅topic `/move_base_simple/goal`, 消息类型`geometry_msgs::PoseStamped`
+
+
+
 # velodyne-master
 
