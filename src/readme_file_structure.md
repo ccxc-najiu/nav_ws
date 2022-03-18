@@ -300,15 +300,61 @@ boundarypointSethigh: Point3d vector类型
 
 ### globalPlanner
 
+该部分主要实现以下功能，订阅topic `/state_estimation`获得小车当前点信息，订阅topic /move_base_simple/goal获得终点信息，读取文件topoMap.txt得到拓扑地图信息，读取文件boundary.ply获得边界信息
+
+在topic  `/move_base_simple/goal`回调函数内，根据拓扑地图信息与当前点，终点计算出一条从当前点到终点的拓扑路径waypoints，将其转化为点云发布到topic `/topoPoint`, 将其转为线段发布到topic `/topoMap`
+
+在main函数while循环中，计算小车当前点与拓扑路径点的距离，确定当前目标点，发布当前目标到topic `/way_point`，同时发布速度到topic `/speed`，发布边界到`/navigation_boundary`，发布整个拓扑地图信息到topic `topoBigMap`
+
+[流程图](./xmind_project/ground_based_autonomy_basic-melodic/waypoint_example/globalPlanner/globalPlanner.xmind)
+
+---
+
 规划部分，可结合data_generate/topoGraph一起看
 
 ---
+
+- 全局变量
 
 graphMapDir: string类型变量
 
 topoMap: routePoint* vector类型变量
 
+startPoint: Point2f类型，在goal_callback中用到，作为起始点，数据来源于全局变量vehicleX, vehicleY
+
+endPoint: Point2f类型，在goal_callback中用到，作为终点，数据来源于订阅topic `/move_base_simple/goal`的输入信息，此即目标点
+
+vehicleX: float类型，来源于所订阅topic `/state_estimation`所输入的信息，此为小车当前所在位置值
+
+vehicleY: float类型，来源于所订阅topic `/state_estimation`所输入的信息，此为小车当前所在位置值
+
+vehicleZ: float类型，来源于所订阅topic `/state_estimation`所输入的信息，此为小车当前所在位置值
+
+find: bool类型，用于bfs中，判断是否有一条从startPoint到endPoint的拓扑路径
+
+newGoal: bool类型，默认值为false, 在回调函数goal_callback中被引用，即从topic `/move_base_simple/goal`获取信息msg, if(msg->pose.position.z >= 0), 则newGoal=true
+
+newPlan: bool类型，默认值为false, 在回调函数goal_callback中被引用，即从topic `/move_base_simple/goal`获取信息msg, if(msg->pose.position.z >= 0), 则newPlan = true
+
+在goal_callback中，主要从订阅信息得到endPoint信息，而startPoint则由vehicleX, vehicleY给的，在这里函数主要用于寻找一条从startPoint到endPoint的拓扑路径，这里newGoal=true, newPlan=true可以理解
+
+waypointXYRadius：全局变量，判定值，如果小车位置与目标点距离小于该值，则认定小车已经到了该点
+
+curTime: float类型，默认值为0,在回调函数中`poseHandler`中被引用，将topic `/state_estimation` 所订阅信息的时间赋值给curTime，其记录当前时间
+
+waypointTime: float类型，默认值为0，其记录在while循环中发布目标点信息的时间，用于与curTime进行比较
+
+frameRate: double类型，用于设置在while循环中发布目标点信息的频率
+
+sendSpeed: bool类型，用于在while循环中发布目标点信息时判断是否发布速度信息
+
+sendBoundary: bool类型，用于在while循环中发布目标点信息时判断是否发布边界信息
+
+speed: double类型，这是在while循环中发布速度信息时的速度
+
 #### main
+
+---
 
 1.设置string，放置存储地址，并读取该地址所对应的文件
 
@@ -353,6 +399,93 @@ topoMap: routePoint* vector类型变量
 11.设置节点，发布到topic `topoBigMap`，消息类型`sensor_msgs::PointCloud2`,句柄为topoMapTotal_pub
 
 12.设置节点，发布到topic `topoMap`，消息类型`visulization_msgs::Marker`，句柄为topoMap_pub
+
+以上5-12步完成了节点的发布与订阅设置
+
+13.定义`visualization_msgs::Marker`类型数据line_list_bigMap, 并向其中填充信息，frame_id="map", id=2, ns="lines", action=ADD, pose.orientation.w=1.0, type=LINE_LIST, scale.x=0.8, color.r=1.0, color.a=1.0，然后以线段的方式向topoMap里填充点（对每一点，先push_back本身，再push_back neighbor）
+
+这里line_list_bigMap所用信息为topoMap，这表明它是不变的数据
+
+14.if (sendBoundary)，这里是定义在本文件的全局变量，如果定义，则`readBoundaryFile()`，读取存储在变量`boundary_file_dir`, 由前面所说的参数读取步骤可知，该变量的值是存储在参数服务器上的参数`boundary_file_dir`，值为`$(find waypoint_example)/data/boundary.ply"`，即`roscd waypoint_example/data/boundary.ply`，读取其中数据，存储在全局变量`boundary`中
+
+15.将boundary中的数据放进`geometry_msgs::PolygonStamped`类型全局变量`boundaryMsgs`中
+
+16.设置ros::Rate rate(100)，进入while()循环，循环内主要让小车当前位置vehicleX, vehicleY与在回调函数`goal_callback`中所计算出的路径waypoints中的点作比较，如果小于waypointXYRadius，此为全局变量，则认为小车已经到达这一个点，从而驶向下一个点
+
+如果行驶过程中`goal_callback`再次被调用，则说明有新的目标点，根据现在的位置生成新的路径waypoints，设置小车从新追踪新路径的第一个点，然后如上
+
+如果行驶到了终点，则不再进行最终
+
+这一切的实现是依据newGoal, newPlan两个全局变量实现的
+
+17.在第16步中只描述了如何比较，已经转换目标点，并没有说明如何将目标点信息发出去，接下来给出相关信息。依旧是在while循环中，这里依据全局变量curTime, waypointTime和frameRate，最终实现以一定频率将目标点位置，当前时间也就是curTime发布到topic `way_point`
+
+18.如果全局变量sendSpeed设置为true，则发布速度全局变量speed到topic `/speed`
+
+19.如果全局变量seendBoundary设置为true, 则发布边界信息到topic `/navigation_boundary`
+
+20.无论如何，在while循环中一定会发布line_list_big_Map即topoMap的全部信息而非仅仅到下一个目标点的路径，到topic `topoBigMap`
+
+#### poseHandle
+
+此为订阅回调函数，订阅topic `/state_estimation`，接收消息类型为`nav_msgs::Odometry`，并把接收到的的消息存储在curTime, vehicleX, vehicleY, vehicleZ中
+
+#### goal_callback
+
+goal_callback作为回调函数，接收`geometry_msgs::PoseStamped`类型的消息，并把其转化为endPoint，然后从全局变量vehicleX, vehicleY中得到startPoint，而vehicleX, vehicleY的值又是从topic `/state_estimation`订阅得到的，相当于两个订阅的topic `/state_estimation`与`/move_base_simple/goal`分别提供了startPoint与endPoint信息
+
+结合topoMap，得到距离这两点最近的topoMap上的点，startNode, endNode，通过函数bfs得到一条从startNode到endNode可行的拓扑路径，加上startPoint, endPoint存储在waypoints上，将这些点转化为点云数据通过topic `topoPoint`发布，然后将这些点以线段形式通过topic `topoMap`发布
+
+---
+
+此为订阅回调函数，订阅topic `/move_base_simple/goal`, 消息类型`geometry_msgs::PoseStamped`
+
+1.定义`pcl::PointXYZ`类型的point，将msg，即订阅得到的`geometry_msgs::PoseStamped`类型消息中的pose.position的x,y,z信息转入给point.x, y, z
+
+2.给全局变量startPoint, endPoint赋值，如下
+
+```c++
+startPoint.x = vehicleX, startPoint.y = vehicleY;
+endPoint.x = point.x, endPoint.y = point.y;
+```
+
+其中用到vehicleX，vehicleY为全局变量，endPoint即为订阅得到的信息
+
+3.定义`routePoint *`类型变量startNode，遍历topoMap，之前在main里面引用过，将一个文件里所有拓扑点信息导入到了其中。计算topoMap中所有点与startPoint的距离的平方，记startNode=topoMap[i]，这里topoMap[i]为与startPoint距离最短的topoMap里的点
+
+**注意**，这里设置了startMinScore=1000，故与startPoint距离最短的拓扑点距离的平方，应当要小于1000，否则startNode未赋值
+
+4.类型于3，不过这次topoMap与endPoint进行比较，将结果导入endNode中，同样有endMinScore=1000，至少要满足该要求
+
+这样，通过3,4，我们得到了startNode, endNode，分别对应距离startPoint, endPoint距离最短的拓扑点
+
+5.定义`map<routePoint* , int>`类型变量flag, 将每个topoMap[i]作为键，其对应值为0，将startNode, endNode作为参数传入bfs，得到一条从startNode到endNode的拓扑路径，存储在path中
+
+6.将waypoints清空，依次加入startPoint-->path--->endPoint，注意path是指从startNode到endNode的拓扑路径，并非是从startPoint到endPoint的路径
+
+7.定义pcl::PointCloud\<pcl::PointXYZ>cloud类型数据，将waypoints数据转到cloud.points数据，定义`sensor_msgs::PointCloud2`类型数据output，将cloud中的数据转换到output中，然后通过topic `topoPoint`发布
+
+8.定义`visualization_msgs::Marker`类型数据line_list_topoMap, 将waypoints中的点信息以连续线段的形式存储到line_list_topoMap中，然后通过topic `topoMap`发布
+
+#### bfs
+
+该函数依据topoMap，找到一条可能存在的从startNode到endNode的路径，存储在path中，其本质是routePoint * 的vector对象
+
+在goal_callback中被调用
+
+```c++
+bool bfs(routePoint *startNode, routePoint *endNode, vector<routePoint *> &path, map<routePoint *, int> &flag)
+```
+
+1.定义`queue<routePoint *>`类型变量processNode，并添加startNode，设置flag[startNode] = 1, 设置bool类型find = false, 设置`routePoint *`类型变量endNodeSearch
+
+2.进入循环，该循环从startNode开始，遍历它每个邻近点，邻近点的邻近点，如果能够找到一条从startNode通往endNode的拓扑路径，则find=true，否则find=false
+
+3.如果find=true，即从startPoint到endPoint之间存在一条拓扑路径，那么将这一条按顺序路径存储到path中，**可能存在着多条路径，但这里只要了最先找到的那条**
+
+#### topic
+
+![image-20220318103559479](https://gitee.com/ccxc1001/image/raw/master/redmi_ubuntu_img/image-20220318103559479.png)
 
 # velodyne-master
 
