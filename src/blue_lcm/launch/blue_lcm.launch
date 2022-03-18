@@ -1,6 +1,7 @@
 <launch>
-
-    <node pkg="blue_lcm" type="blue_lcm_pro"    name="blue_lcm_pro"    output="screen"/>
-
+    <group ns="group_namespace">
+        <node pkg="blue_lcm" type="blue_lcm_pro"    name="blue_lcm_pro" ns="blue_lcm" output="screen"/>
+        <node pkg="blue_lcm" type="blue_lcm_teleop" name="blue_lcm_teleop" output="screen" ns="blue_lcm"/>
+    </group>
 </launch>
 

@@ -140,6 +140,9 @@ add_library( blue_lcm_shared SHARED src/lcm/robot_control_t.c)
 ## With catkin_make all packages are built within a single CMake context
 ## The recommended prefix ensures that target names across packages don't collide
  add_executable(blue_lcm_pro src/main.cpp)
+ add_executable(blue_lcm_teleop src/teleop.cpp)
+add_executable(blue_lcm_test src/test.cpp)
+
 
 ## Rename C++ executable without prefix
 ## The above recommended prefix causes long target names, the following renames the
@@ -150,12 +153,18 @@ add_library( blue_lcm_shared SHARED src/lcm/robot_control_t.c)
 ## Add cmake target dependencies of the executable
 ## same as for the library above
  add_dependencies(blue_lcm_pro ${lcm_pro_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
-
+ add_dependencies(blue_lcm_teleop ${lcm_pro_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
+ add_dependencies(blue_lcm_test ${lcm_pro_EXPORTED_TARGETS} ${catkin_EXPORTED_TARGETS})
 ## Specify libraries to link a library or executable target against
  target_link_libraries(blue_lcm_pro lcm pthread blue_lcm_shared
    ${catkin_LIBRARIES}
  )
-
+ target_link_libraries(blue_lcm_test lcm pthread blue_lcm_shared
+ ${catkin_LIBRARIES}
+)
+target_link_libraries(blue_lcm_teleop lcm pthread blue_lcm_shared
+${catkin_LIBRARIES}
+)
 #############
 ## Install ##
 #############

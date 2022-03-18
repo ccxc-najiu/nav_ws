@@ -32,7 +32,7 @@ void LCMSend2V(double v,double w){
     // printf("\r\n[%s] \n", __func__);
     robot_control_t data;
     int left, right;
-    
+
     if (v == 0.0){
 	  left = - w * 500;
 	  right = w * 500;
@@ -126,10 +126,10 @@ void cmd_velHandle(const geometry_msgs::TwistStampedConstPtr& cmdmsg)
 int main(int argc, char **argv)
 {
 
-    ros::init(argc, argv, "blue_lcm_pub");
-    ros::NodeHandle n;
-
-    ros::Subscriber cmd_sub = n.subscribe<geometry_msgs::TwistStamped>("/cmd_vel", 100, &cmd_velHandle);
+    ros::init(argc, argv, "blue_lcm_pub"); //blue_lcm_pub为node名称，但会被blue_lcm.launch的name覆盖
+    ros::NodeHandle n("public_namespace");
+    ros::NodeHandle np("~private_namespace");
+    ros::Subscriber cmd_sub = np.subscribe<geometry_msgs::TwistStamped>("/cmd_vel", 100, &cmd_velHandle);
     pubpose = n.advertise<geometry_msgs::PoseStamped>("/pose", 100);
     pthread_t lcm_thread;
     lcm = lcm_create("udpm://224.0.0.1:7667?ttl=1");
