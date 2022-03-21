@@ -290,11 +290,183 @@ boundarypointSethigh: Point3d vector类型
 
 车辆仿真
 
+该ros包主要功能是实现了一个双轮差动底盘的模拟,接收cmd_vel速度信息,自己手写的机器人运动学微分方程来对机器人位姿进行推算,从而输出里程计odometry,而gazebo只是用来做模型显示.该包中包含了CMU制作的几个探索gazebo world,分别包含了不同的环境类型.
+
+思维导图如下(点击调整到xmind格式)，它接收topic `/cmd_vel`，`/terrain_map`传回的传感器信息，进行机器人位置，姿态计算，发布到topic `/state_estimation`与`/gaozabo/set_model_state`
+
+[![image-20220321094905319](https://gitee.com/ccxc1001/image/raw/master/readme_window_image/image-20220321094905319.png)](./xmind_project/ground_based_autonomy_basic-melodic/vehicle_simulator/vehicleSimulator.xmind)
+
+---
+
+全局变量
+
+---
+
+由于是仿真，所以并没有实际的传感器，很多的值都是估算而出，不必太过考究
+
+---
+
+odomTime: ros::Time类型，无默认值，在while循环中被调用`odomTime = ros::Time::now();`，为当前时间
+
+stackNum: const int类型，设置为400，堆栈数，配合odomSendIDPointer与odomRecIDPointer使用，构成vehicleXStack, vehicleYStack, vehicleZStack, vehicleRollStack, float vehiclePitchStack, vehicleYawStack, terrainRollStack, terrainPitchStack, odomTimeStack
+
+odomSendIDPointer: int类型，默认值为-1，在while循环中被调用，`odomSendIDPointer = (odomSendIDPointer + 1) % stackNum`，每一次循环加1，但不超过stackNum，表示发送信息的次数
+
+odomRecIDPointer: int类型，默认值为0，在回调函数scanHandler被引用，`odomRecIDPointer = (odomRecIDPointer + 1) % stackNum;`，表示接收点云信息的次数
+
+vehicleYaw: float类型，默认值为0，在while循环中被调用 `vehicleYaw += 0.005 * vehicleYawRate;`，为当前偏航角
+
+vehicleRoll: float类型，默认值为0，在while循环中被引用赋值，计算公式为
+
+```c++
+vehicleRoll = terrainRoll * cos(vehicleYaw) + terrainPitch * sin(vehicleYaw)
+```
+
+为小车翻滚角
+
+vehiclePitch: float类型，默认值为0，在while循环中被引用赋值，计算公式为
+
+```cpp
+vehiclePitch = -terrainRoll * sin(vehicleYaw) + terrainPitch * cos(vehicleYaw);
+```
+
+为小车俯仰角
+
+terrainRoll: float类型，默认值为0，在回调函数terrainCloudHandler中被引用赋值，应当为地形翻滚角
+
+terrainPitch: float类型，默认值为0，在回调函数terrainCloudHandler中被引用赋值，应当为地形俯仰角
+
+vehicleYawRate: float类型，默认值为0，在回调函数speedHandler被调用，接收topic `/cmd_vel`传递而来的信息
+
+vehicleSpeed: float类型，默认值为0，在回调函数speedHandler被调用，接收topic `/cmd_vel`传递而来的信息
+
+由vehicleYawRate与vehicleSpeed可以模拟计算出许多有用的信息
+
+vehicleX: float类型，默认值为0，在while循环中由公式
+
+```cpp
+vehicleX += 0.005 * cos(vehicleYaw) * vehicleSpeed 
+              + 0.005 * vehicleYawRate * (-sin(vehicleYaw) * sensorOffsetX - cos(vehicleYaw) * sensorOffsetY);
+```
+
+计算而出，为小车当前位置信息
+
+vehicleY: float类型，默认值为0，在while循环中由公式
+
+```cpp
+vehicleY += 0.005 * sin(vehicleYaw) * vehicleSpeed 
+              + 0.005 * vehicleYawRate * (cos(vehicleYaw) * sensorOffsetX - sin(vehicleYaw) * sensorOffsetY);
+```
+
+计算而出
+
+vehicleZ: float类型，默认值为0，在while循环中由公式
+
+```cpp
+vehicleZ = terrainZ + vehicleHeight;
+```
+
+计算而出
+
+下面解释其计算原理，之前有过设置，ros::rate(200)，所以一次循环的时间差不多差不多5ms（这里不严谨，因为执行回调函数也需要不定的时间，如果把ros.sleep放在三个位置计算之前就是标准的5ms了）
+
+而vehicleYaw为偏航角，vehicleSpeed为线速度，`0.005 * cos(vehicleYaw) * vehicleSpeed `表示由线速度对小车X坐标的影响
+
+vehicleYawRate为角速度，sensorOffsetX为传感器距中心在X方向的偏移，sensorOffsetY为传感器距中心在Y方向的偏移。由于小车传感器并不在小车中心，所以角速度也会产生影响，它的影响在后半部分`0.005 * vehicleYawRate * (-sin(vehicleYaw) * sensorOffsetX - cos(vehicleYaw) * sensorOffsetY)`，可以画图来辅助思考
+
+vehicleY也是类似vehicleX计算
+
+vehicleZ则取决于当前地形高度
+
+
+
+---
+
+该文件夹里面只有一个cpp文件vehicleSimulator.cpp，所以直接看它就好了
+
+### main
+
+1.初始化节点，命名为vehicleSimulator, 但vehicle_simulator.launch文件里，它的名字为vehicleSimulator，覆盖了之前的名字（覆盖了寂寞），通过getParam获取一堆参数，它们定义在vehicle_simulator.launch文件里
+
+2.设置节点，订阅topic `/velodyne_points`，回调函数scanHandler，句柄subScan
+
+3.设置节点，订阅topic `/terrain_map`，回调函数terrainCloudHandler，句柄subTerrainCloud
+
+4.设置节点，订阅topic `/cmd_vel`，回调函数speedHandler，句柄subSpeed
+
+5.设置节点，准备发布到topic `/state_estimation`，句柄pubVehicleOdom，message类型为`nav_msgs::Odometry`. 定义nav_msgs::Odometry类型变量odomData。设置其 head.frame_id="/map", child_frame_id="/sensor"
+
+这里可以与waypoint_example文件夹下三个cpp文件联系起来，它们都订阅了这个topic，用以获得小车当前位置信息
+
+6.设置节点，准备发布到topic `/gazebo/set_model_state`，句柄pubModelState，message type为`gazebo_msgs::Mode1State`，定义该类型变量cameraState, lidarState, 并设置其model_name分别为camera, lidar.
+
+7.设置节点，准备发布到topic `/registered_scan`，句柄为pubScan，message type `sensor_msgs::PointCloud2`
+
+8.设置ros::rate，频率为200Hz，进入循环，执行spinOnce()，执行订阅回调函数。
+
+9.在循环内根据角速度vehicleYawRate, 地形地貌terrainPitch, terrainRoll来更新vehicleRoll, vehiclePitch, vehicleYaw，这里vehicleYaw要限制在-PI到PI内
+
+10.根据小车当前偏航角vehicleYaw, 当前线速度vehicleSpeed, 当前角速度vehicleYawRate，传感器偏心距sensorOffsetX, sensorOffsetY，地形高度terrainZ, 小车中心高vehicleHeight来计算出vehicleX, vehicleY，计算方式参考全局变量处描述
+
+11.更新时间，并把小车位置信息，时间，姿态角，地形姿态存储在堆栈中
+
+12.定义`geometry_msgs::Quaternion`类型信息geoQuat，此为四元数，用以表示由vehicleRoll, vehiclePitch, vehicleYaw表示的旋转
+
+13.向全局变量，`nav_msgs::Odeometry`类型数据odomData填充时间，四元数geoQuat，当前位置信息，三个方向角速度，线速度等信息，然后Publish到topic `/state_estimation`
+
+14.将小车位置信息与姿态存储到cameraState与lidarState，然后发布到topic `/gazebo/set_model_state`
+
+### scanHandler
+
+这是传感器回调函数，应当是接收激光雷达传回的点云
+
+此处从topic `/velodyne_points`接收点云，并将其转换到世界系下发布到topic `/registered_scan`
+
+---
+
+1.如果系统没有初始化，则是在执行五次回调函数后进行初始化，然后程序才能继续往下运行，这里应当是为了让传感器数据更加稳定
+
+2.用一个while循环确保当前odomRecIDPointer指向的时间大于接收点云信息的时间，如果不大于且odomRecIDPointer小于odomSendIDPointer，则odomRecIDPointer+1，继续比较，如果时间大于或者odomRecIDPointer不能再加(再加就要超过odomSendIDPointer，这在逻辑上不可能，因为总是要线发送后接收)跳出循环，继续程序
+
+总之就是确保在逻辑上时间的正确（实际情况不用考虑，仿真情形则要小心）
+
+3.如果use_gazebo_time为true，则接收时间，接收时小车位置，姿态，地形姿态等信息使用接收时刻所对应的值，即odomRecIDPointer所指向的堆栈值，如果use_gazebo_time为false，则以上信息使用当前时刻的值，即在while循环中更新的最新值
+
+4.清空全局变量scanData, 用它来接收所订阅topic 传来的点云数据，并去除异常值
+
+5.将点云数据转化到世界坐标系下，转化公式尚不能理解
+
+6.定义sensor_msgs::PointCloud2类型数据，设置head.stamp为接收时间，header.frame_id为`/map`，发布到topic `/registered_scan`
+
+### terrainCloudHandler
+
+---
+
+这里也是点云类型数据，不过scanHandler传回来的是小车本身的数据，这里传回来的是地形地貌数据
+
+根据数据计算出terrainPitch与terrainRoll，用以确定结合vehicleYawRate，vehicleYaw来计算出小车本身姿态角vehicleRoll，vehiclePitch与地形高度  terrainZ
+
+具体转化过程尚不能理解
+
+### speedHandler
+
+接收topic `/cmd_vel`传过来的控制信息，设置vehicleSpeed的值为目标速度，vehicleYawRate的值为目标角速度，由于是在仿真环境，设定速度，角速度后可以直接达到，所以vehicleSpeed, vehicleYawRate也可以认定为由传感器获得的当前线速度，角速度
+
+### topic
+
+
+
 ## velodyne_simulator
 
 不明
 
 ## local_planner
+
+### localPlanner
+
+### pathFollower
+
+
 
 ## waypoint_example
 
@@ -486,6 +658,102 @@ bool bfs(routePoint *startNode, routePoint *endNode, vector<routePoint *> &path,
 #### topic
 
 ![image-20220318103559479](https://gitee.com/ccxc1001/image/raw/master/redmi_ubuntu_img/image-20220318103559479.png)
+
+### rvizWayPoint
+
+---
+
+这部分为globalPlanner的拙劣模仿，依旧订阅`/state_estimation`与`/move_base_simple/goal`，但是`/state_estimation`没有起到任何作用，本部分唯一作用在于从topic `/move_base_simple/goal`接收目标点信息，然后不生成拓扑路径直接发布到topic  `way_point`, 所以它没有子目标点，只需要不断到达所发布的点
+
+---
+
+- 全局变量
+
+curTime: double类型，默认值为0，在topic `state_estimation` 回调函数`poseHandler`中被引用赋值，设置为当前时间
+
+vehicleX: float类型，默认值为0，在topic `state_estimation` 回调函数`poseHandler`中被引用赋值，为当前小车所在位置
+
+vehicleY: float类型，默认值为0，在topic `state_estimation` 回调函数`poseHandler`中被引用赋值，为当前小车所在位置
+
+vehicleZ: float类型，默认值为0，在topic `state_estimation` 回调函数`poseHandler`中被引用赋值，为当前小车所在位置
+
+#### main
+
+1.设置节点`waypointExample`，不过它会在`rvizWayPoint.launch`文件里被重命名为`rvizWaypoint`，获取参数，都写在`rvizWayPoint.launch`文件里
+
+2.设置节点订阅topic `/state_estimation`，回调函数`poseHandler`，句柄subPose
+
+3.设置节点将要发布到topic `/speed`，句柄pubSpeed
+
+4.设置节点将要发布到topic `/navigation_boundary`，句柄pubBoundary
+
+5.设置节点将要发布到topic `/way_point`，句柄pubWaypoint
+
+6.设置节点订阅topic `/move_base_simple/goal`，回调函数goal_callback，句柄subWaypoint
+
+7.全局变量sendBoundary为true，读取文件`boundary.ply`, 存储到变量boundary，将其转化为`geometry_msgs::PolygonStamped`形式
+
+#### poseHandler
+
+此为topic `state_estimation`的回调函数，它从订阅得到的信息里取出时间，位置分别存储到全局变量curTime, vehicleX, vehicleY, vehicleZ
+
+#### goal_callback
+
+此为topic `/move_base_simple/goal`的回调函数，从订阅信息抽取位置信息，转换为`geometry_msgs::PointStamped`格式，发布到topic `way_point`
+
+#### topic
+
+![image-20220318195108268](https://gitee.com/ccxc1001/image/raw/master/readme_window_image/image-20220318195108268.png)
+
+### waypointExample
+
+---
+
+这部分所做的事情和`globalPlanner`很像，都是从topic `/state_estimation`获取小车当前位置信息，不同于`globalPlanner`从topic `/move_base_simple/goal`获取目标点信息生成拓扑路径，这里直接读取waypoints.ply文件获得拓扑路径信息
+
+之后这里还有一个限制，到达子目标点之后，需要等一段waitTime时间，才能发布下一个子目标点，在循环，也发布信息到topic `way_point`, `/speed`, `/navigation_boundary`
+
+---
+
+- 全局变量
+
+waypoints: `pcl::PointCloud<pcl::PointXYZ>::Pt`类型，存储从waypoints.ply文件读取的全部点信息
+
+vehicleX: float类型，默认值为0，存储小车当前位置信息
+
+vehicleY: float类型，默认值为0，存储小车当前位置信息
+
+vehicleZ: float类型，默认值为0，存储小车当前位置信息
+
+---
+
+#### main
+
+1.初始化节点，获取在launch文件中定义的参数
+
+2.设置节点，订阅topic `/state_estimation`, 回调函数poseHandler，句柄subPose
+
+3.设置节点准备发布，发布到topic `/way_point`，句柄pubWaypoint
+
+4.设置节点准备发布，发布到topic `/speed`，句柄为pubSpeed
+
+5.设置节点准备发布，发布到topic `/navigation_boundary`, 句柄为pubBoundary
+
+6.运行函数`readWaypointFile`, 文件路径在waypoint_example.launch文件里，读取waypoints.ply文件，将其中所有点信息存储在`waypoints`中
+
+7.如果全局变量`sendBoundary`设置为true, 则从boundary.ply文件读取数据，存储在全局变量`boundary`中，将boundary数据转换到boundaryMsgs中
+
+8.做类似于`globalPlanner`中while循环内的事情，不过这里依据读取`waypoints`文件获得拓扑路径，在`globalPlanner`里依据topoMap得到拓扑路径，但之后的操作一致，到达子目标点，再发布下一个子目标点，这里还多了一个限制条件，只有当在到达子目标点之后，经过大于全局变量`waitTime`的时间，才发布下一个子目标点
+
+9.以一定频率将子目标点位置，以及当前时间也就是curTime发布到topic `way_point`
+
+10.如果全局变量sendSpeed设置为true，则发布速度全局变量speed到topic `/speed`
+
+11.如果全局变量seendBoundary设置为true, 则发布边界信息到topic `/navigation_boundary`
+
+#### poseHandler
+
+此为topic `state_estimation`的回调函数，它从订阅得到的信息里取出时间，位置分别存储到全局变量curTime, vehicleX, vehicleY, vehicleZ
 
 # velodyne-master
 
