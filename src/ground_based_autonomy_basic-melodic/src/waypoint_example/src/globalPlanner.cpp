@@ -398,7 +398,7 @@ void poseHandler(const nav_msgs::Odometry::ConstPtr &pose)
 void goal_callback(const geometry_msgs::PoseStamped::ConstPtr &msg)
 {
 
-	pcl::PointXYZ point;
+	pcl::PointXYZ point; // pcl::PointXYZ
 	if (msg->pose.position.z >= 0)
 	{
 
@@ -411,7 +411,7 @@ void goal_callback(const geometry_msgs::PoseStamped::ConstPtr &msg)
 		endPoint.x = point.x, endPoint.y = point.y;
 
 		float startMinScore = 1000;
-		float endMinScore = 1000; 
+		float endMinScore = 1000;
 		routePoint *startNode, *endNode;
 
 		for (int i = 0; i < topoMap.size(); i++)
@@ -472,6 +472,8 @@ void goal_callback(const geometry_msgs::PoseStamped::ConstPtr &msg)
 		pointPath.y = endPoint.y;
 		pointPath.z = 0.0;
 		waypoints->points.push_back(pointPath);
+		// 这样waypoints = startPoint -> path -> endPoint
+
 		cout << "sub goal point number has     " << waypoints->points.size() - 1 << endl;
 		newGoal = true;
 		newPlan = true;
